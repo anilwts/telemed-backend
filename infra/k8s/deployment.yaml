@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemed-api
+  labels: { app: telemed-api }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: telemed-api }
+  template:
+    metadata:
+      labels: { app: telemed-api }
+    spec:
+      containers:
+        - name: api
+          image: YOUR_REGISTRY/telemed-api:REPLACE_WITH_IMMUTABLE_TAG
+          ports: [{ containerPort: 3000 }]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: telemed-api-secrets, key: database-url }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: telemed-api-secrets, key: jwt-secret }
+            - name: JWT_ISSUER
+              value: telemed-api
+            - name: JWT_AUDIENCE
+              value: telemed-clients
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 1000m, memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telemed-api
+spec:
+  selector: { app: telemed-api }
+  ports: [{ port: 80, targetPort: 3000 }]
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: telemed-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: telemed-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 65 }

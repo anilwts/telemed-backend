@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: Telemed API
+  version: 1.0.0
+  description: Telemedicine backend starter API. All timestamps are ISO-8601 UTC.
+servers:
+  - url: http://localhost:3000/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      security: []
+      summary: Register patient or doctor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email,password,role,fullName]
+              properties:
+                email: {type: string, format: email}
+                password: {type: string, minLength: 12}
+                role: {type: string, enum: [PATIENT, DOCTOR]}
+                fullName: {type: string}
+                specialty: {type: string}
+                licenseNumber: {type: string}
+      responses:
+        '201': {description: Created}
+        '409': {description: Duplicate email or license}
+  /auth/login:
+    post:
+      security: []
+      summary: Login
+      responses:
+        '200': {description: Access token}
+        '401': {description: Invalid credentials}
+  /doctors/search:
+    get:
+      security: []
+      summary: Search verified doctors
+      parameters:
+        - {in: query, name: q, schema: {type: string}}
+        - {in: query, name: specialty, schema: {type: string}}
+        - {in: query, name: limit, schema: {type: integer, maximum: 100}}
+      responses:
+        '200': {description: Doctor list}
+  /doctors/{doctorId}/availability:
+    get:
+      security: []
+      parameters:
+        - {in: path, name: doctorId, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Available slots}
+  /doctors/availability:
+    post:
+      summary: Create doctor availability
+      security: [{bearerAuth: []}]
+      responses:
+        '201': {description: Slot created}
+  /consultations:
+    post:
+      summary: Book consultation
+      parameters:
+        - {in: header, name: Idempotency-Key, required: true, schema: {type: string, maxLength: 128}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slotId]
+              properties:
+                slotId: {type: string, format: uuid}
+                reason: {type: string, maxLength: 2000}
+      responses:
+        '201': {description: Booking created or idempotent replay}
+        '409': {description: Slot conflict or key reused with different payload}
+  /consultations/mine:
+    get:
+      summary: List caller's consultations
+      responses:
+        '200': {description: Consultation list}
+  /consultations/{id}/status:
+    patch:
+      summary: Update consultation status
+      responses:
+        '200': {description: Updated consultation}
+  /prescriptions/{consultationId}:
+    post:
+      summary: Create prescription for own consultation
+      responses:
+        '201': {description: Prescription created}
+    get:
+      summary: Read prescription (patient, assigned doctor, or admin)
+      responses:
+        '200': {description: Prescription}
+  /admin/analytics:
+    get:
+      summary: Admin analytics
+      responses:
+        '200': {description: Aggregates}
+  /admin/audit:
+    get:
+      summary: Read audit events (admin only)
+      responses:
+        '200': {description: Audit events}
+  /health/live:
+    get:
+      security: []
+      responses:
+        '200': {description: Process alive}
+  /health/ready:
+    get:
+      security: []
+      responses:
+        '200': {description: DB ready}
+  /metrics:
+    get:
+      security: []
+      responses:
+        '200': {description: Prometheus metrics}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
